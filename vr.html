@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Visualisation VR</title>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100vw; height: 100vh; background: #111; }
+    #renderCanvas { width: 100vw; height: 100vh; touch-action: none; }
+    #infoBox {
+      position: absolute;
+      top: 10px; left: 10px;
+      background: rgba(0,0,0,0.85);
+      color: white;
+      padding: 10px 14px;
+      border: 1px solid #6366f1;
+      border-radius: 6px;
+      font-family: sans-serif;
+      font-size: 14px;
+      display: none;
+      z-index: 99;
+    }
+  </style>
+
+  <!-- Babylon.js + Firebase -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+</head>
+
+<body>
+  <canvas id="renderCanvas"></canvas>
+  <div id="infoBox">Chargement…</div>
+
+  <script>
+    // 🔥 Configuration Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyDyxGQOvCLnt1YJLVtPCpEOv-urHd3Sl2k",
+      authDomain: "db25-c998e.firebaseapp.com",
+      projectId: "db25-c998e"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // 🎮 Babylon
+    const canvas = document.getElementById("renderCanvas");
+    const engine = new BABYLON.Engine(canvas, true);
+    const scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color4(0.1, 0.1, 0.1, 1);
+
+    const camera = new BABYLON.ArcRotateCamera("camera", Math.PI/2, Math.PI/2.5, 10, BABYLON.Vector3.Zero(), scene);
+    camera.attachControl(canvas, true);
+    const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+
+    const infoBox = document.getElementById("infoBox");
+
+    // 📦 Charger le modèle
+    BABYLON.SceneLoader.Append("", "https://cdn.glitch.global/f361a185-f7d0-434d-8c40-3f71fd77f5e4/glb3.glb?v=1747001552378", scene, () => {
+      console.log("✅ Modèle chargé !");
+    });
+
+    // 🧠 Clic sur mesh → récupère données Firestore
+    scene.onPointerObservable.add(async (pointerInfo) => {
+      if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERPICK) {
+        const mesh = pointerInfo.pickInfo.pickedMesh;
+        if (mesh && mesh.name) {
+          const id = mesh.name.trim();
+          console.log("🔍 Clic sur :", id);
+
+          try {
+            const doc = await db.collection("mesures").doc(id).get();
+            if (doc.exists) {
+              const data = doc.data();
+              infoBox.innerHTML = `
+                <strong>🆔 ${id}</strong><br>
+                Température : <strong>${data.temperature ?? "?"} °C</strong><br>
+                Puissance : <strong>${data.puissance ?? "?"} W</strong><br>
+                État : <strong>${data.etat ?? "?"}</strong>
+              `;
+              infoBox.style.display = "block";
+            } else {
+              infoBox.innerHTML = `❌ Aucun document trouvé pour : ${id}`;
+              infoBox.style.display = "block";
+            }
+          } catch (err) {
+            infoBox.innerHTML = `Erreur Firebase : ${err.message}`;
+            infoBox.style.display = "block";
+          }
+        }
+      }
+    });
+
+    BABYLON.WebXRDefaultExperience.CreateAsync(scene);
+    engine.runRenderLoop(() => scene.render());
+    window.addEventListener("resize", () => engine.resize());
+  </script>
+</body>
+</html>
